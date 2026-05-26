@@ -13,31 +13,55 @@ import (
 // FetchAccountState retrieves the user's perpetuals account state and
 // converts the underlying string-typed fields into typed floats with
 // derived metrics computed.
+//
+// Hyperliquid Unified Account: collateral can sit in either the perps
+// subaccount (clearinghouseState) or as spot USDC. We query both and
+// combine for the true Unified Account view that matches the UI.
 func (c *Client) FetchAccountState(ctx context.Context, wallet string) (*AccountState, error) {
 	if err := validateAddress(wallet); err != nil {
 		return nil, err
 	}
 
-	state, err := c.info.UserState(ctx, wallet)
+	perpsState, err := c.info.UserState(ctx, wallet)
 	if err != nil {
 		return nil, &Error{Code: ErrUpstreamFailed, Message: "user_state: " + err.Error()}
 	}
 
+	spotState, err := c.info.SpotUserState(ctx, wallet)
+	if err != nil {
+		return nil, &Error{Code: ErrUpstreamFailed, Message: "spot_user_state: " + err.Error()}
+	}
+
+	perpsAccountValue := parseFloat(perpsState.MarginSummary.AccountValue)
+	perpsWithdrawable := parseFloat(perpsState.Withdrawable)
+	totalMarginUsed := parseFloat(perpsState.MarginSummary.TotalMarginUsed)
+	totalNotional := parseFloat(perpsState.MarginSummary.TotalNtlPos)
+
+	spotUSDC := 0.0
+	for _, b := range spotState.Balances {
+		if b.Coin == "USDC" {
+			spotUSDC += parseFloat(b.Total)
+		}
+	}
+
+	totalAccountValue := perpsAccountValue + spotUSDC
+	totalWithdrawable := perpsWithdrawable + spotUSDC
+
 	out := &AccountState{
 		Wallet:           wallet,
-		AccountValueUSD:  parseFloat(state.MarginSummary.AccountValue),
-		WithdrawableUSD:  parseFloat(state.Withdrawable),
-		TotalNotionalUSD: parseFloat(state.MarginSummary.TotalNtlPos),
-		TotalMarginUsed:  parseFloat(state.MarginSummary.TotalMarginUsed),
+		AccountValueUSD:  totalAccountValue,
+		WithdrawableUSD:  totalWithdrawable,
+		TotalNotionalUSD: totalNotional,
+		TotalMarginUsed:  totalMarginUsed,
 		FetchedAt:        time.Now(),
 	}
 
-	if out.AccountValueUSD > 0 {
-		out.MarginUtilization = (out.TotalMarginUsed / out.AccountValueUSD) * 100
+	if totalAccountValue > 0 {
+		out.MarginUtilization = (totalMarginUsed / totalAccountValue) * 100
 	}
 
-	out.Positions = make([]Position, 0, len(state.AssetPositions))
-	for _, ap := range state.AssetPositions {
+	out.Positions = make([]Position, 0, len(perpsState.AssetPositions))
+	for _, ap := range perpsState.AssetPositions {
 		out.Positions = append(out.Positions, normalizePosition(ap))
 	}
 
