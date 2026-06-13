@@ -33,6 +33,10 @@ func New(cfg Config) (*Client, error) {
 // Close releases resources. Currently a no-op (no persistent connection).
 func (c *Client) Close() error { return nil }
 
+// DefaultWallet returns the optional default wallet configured via
+// Config.Wallet (trimmed), or "" when none was set.
+func (c *Client) DefaultWallet() string { return strings.TrimSpace(c.cfg.Wallet) }
+
 // validateAddress performs a minimal sanity check on a wallet address.
 func validateAddress(addr string) error {
 	a := strings.TrimSpace(addr)
