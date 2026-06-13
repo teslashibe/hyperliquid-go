@@ -9,17 +9,21 @@ import (
 
 // GetOpenOrdersInput is the typed input for hyperliquid_get_open_orders.
 type GetOpenOrdersInput struct {
-	Wallet string `json:"wallet" jsonschema:"description=42-character 0x-prefixed Ethereum address.,required"`
+	Wallet string `json:"wallet,omitempty" jsonschema:"description=42-character 0x-prefixed address. Optional when the client has a default wallet configured."`
 }
 
 // GetRecentFillsInput is the typed input for hyperliquid_get_recent_fills.
 type GetRecentFillsInput struct {
-	Wallet string `json:"wallet" jsonschema:"description=42-character 0x-prefixed Ethereum address.,required"`
+	Wallet string `json:"wallet,omitempty" jsonschema:"description=42-character 0x-prefixed address. Optional when the client has a default wallet configured."`
 	Limit  int    `json:"limit,omitempty" jsonschema:"description=Maximum number of recent fills to return (most recent first). Default 50.,minimum=1,maximum=500,default=50"`
 }
 
 func getOpenOrders(ctx context.Context, c *hyperliquid.Client, in GetOpenOrdersInput) (any, error) {
-	orders, err := c.FetchOpenOrders(ctx, in.Wallet)
+	wallet, err := resolveWallet(c, in.Wallet)
+	if err != nil {
+		return nil, err
+	}
+	orders, err := c.FetchOpenOrders(ctx, wallet)
 	if err != nil {
 		return nil, wrapErr(err, "get_open_orders")
 	}
@@ -27,11 +31,15 @@ func getOpenOrders(ctx context.Context, c *hyperliquid.Client, in GetOpenOrdersI
 }
 
 func getRecentFills(ctx context.Context, c *hyperliquid.Client, in GetRecentFillsInput) (any, error) {
+	wallet, err := resolveWallet(c, in.Wallet)
+	if err != nil {
+		return nil, err
+	}
 	limit := in.Limit
 	if limit <= 0 {
 		limit = 50
 	}
-	fills, err := c.FetchRecentFills(ctx, in.Wallet, limit)
+	fills, err := c.FetchRecentFills(ctx, wallet, limit)
 	if err != nil {
 		return nil, wrapErr(err, "get_recent_fills")
 	}
