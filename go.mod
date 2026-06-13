@@ -1,6 +1,6 @@
 module github.com/teslashibe/hyperliquid-go
 
-go 1.26.2
+go 1.25.3
 
 require (
 	github.com/sonirico/go-hyperliquid v0.36.0
